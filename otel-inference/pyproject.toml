@@ -6,8 +6,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 dependencies = [
-    # GPU exporter
-    "pynvml>=11.5.0",
+    # GPU exporter (nvidia-ml-py provides the `pynvml` module; the old pynvml
+    # distribution is deprecated)
+    "nvidia-ml-py>=12.535.0",
     "opentelemetry-sdk>=1.27.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
     # load generator

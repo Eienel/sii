@@ -57,6 +57,13 @@ processors:
   transform/genai_convention:
     error_mode: ignore
     metric_statements:
+      # NOTE ON NAMES: vLLM exposes colon names (vllm:prefix_cache_hits). If the
+      # prometheus receiver on your collector build normalizes colons to
+      # underscores (vllm_prefix_cache_hits), the exact-match `where` clauses below
+      # won't fire. The Day-1 probe cell in notebooks/kaggle_vllm.ipynb prints the
+      # names as ingested; if they're underscored, swap `==` for a separator-robust
+      # match, e.g.:
+      #   set(name, "gen_ai.server.kv_cache.hits") where IsMatch(name, "^vllm[:_]prefix_cache_hits$")
       - context: metric
         statements:
           # ---- vLLM: KV / prefix cache ----

@@ -49,7 +49,15 @@ def main() -> None:
     parser.add_argument("--gen-ai-system", default="vllm", help="engine label for the GPU host")
     args = parser.parse_args()
 
-    pynvml.nvmlInit()
+    try:
+        pynvml.nvmlInit()
+    except pynvml.NVMLError as exc:
+        print(
+            f"[gpu_otel] no NVIDIA GPU / NVML available ({exc}). "
+            "This sidecar only runs on the GPU host that serves the model; "
+            "skip it in CPU-only environments.",
+        )
+        raise SystemExit(0)
     device_count = pynvml.nvmlDeviceGetCount()
     handles = [pynvml.nvmlDeviceGetHandleByIndex(i) for i in range(device_count)]
     names = [_decode(pynvml.nvmlDeviceGetName(h)) for h in handles]
