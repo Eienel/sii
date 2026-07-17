@@ -65,8 +65,10 @@ already emits.
 
 ## Quickstart
 
-See [`notebooks/kaggle_vllm.ipynb`](notebooks/kaggle_vllm.ipynb) for the free-GPU
-path, or run locally:
+**Free-GPU path:** follow [`docs/RUNNING_ON_KAGGLE.md`](docs/RUNNING_ON_KAGGLE.md)
+(step-by-step, ~15 min) with [`notebooks/kaggle_vllm.ipynb`](notebooks/kaggle_vllm.ipynb).
+
+Or run locally:
 
 ```bash
 # 1. self-hosted SigNoz (for the pre-event blog / data ownership)
