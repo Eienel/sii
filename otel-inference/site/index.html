@@ -1,0 +1,390 @@
+<title>otel-inference — a causal view for self-hosted LLM inference</title>
+<style>
+  :root {
+    --ground: #f4f6f8;
+    --panel: #ffffff;
+    --panel-2: #eef1f4;
+    --ink: #10151c;
+    --ink-soft: #43505f;
+    --ink-faint: #6b7889;
+    --line: #d9dfe6;
+    --accent: #0f9e8f;
+    --accent-bright: #12b7a6;
+    --good: #1f9d57;
+    --warn: #c98a12;
+    --crit: #d0463b;
+    --shadow: 0 1px 2px rgba(16,21,28,.06), 0 8px 30px rgba(16,21,28,.06);
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0c0e13;
+      --panel: #12151c;
+      --panel-2: #171b24;
+      --ink: #e8edf3;
+      --ink-soft: #aab6c4;
+      --ink-faint: #71808f;
+      --line: #232a35;
+      --accent: #2fd4c4;
+      --accent-bright: #4fe6d6;
+      --good: #46c980;
+      --warn: #e0ac4c;
+      --crit: #ef6a5f;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 40px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f4f6f8; --panel: #ffffff; --panel-2: #eef1f4;
+    --ink: #10151c; --ink-soft: #43505f; --ink-faint: #6b7889; --line: #d9dfe6;
+    --accent: #0f9e8f; --accent-bright: #12b7a6;
+    --good: #1f9d57; --warn: #c98a12; --crit: #d0463b;
+    --shadow: 0 1px 2px rgba(16,21,28,.06), 0 8px 30px rgba(16,21,28,.06);
+  }
+  :root[data-theme="dark"] {
+    --ground: #0c0e13; --panel: #12151c; --panel-2: #171b24;
+    --ink: #e8edf3; --ink-soft: #aab6c4; --ink-faint: #71808f; --line: #232a35;
+    --accent: #2fd4c4; --accent-bright: #4fe6d6;
+    --good: #46c980; --warn: #e0ac4c; --crit: #ef6a5f;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 40px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; border-radius: 3px; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--accent); margin: 0;
+  }
+
+  /* ---------- hero ---------- */
+  header.hero { padding: 72px 0 40px; border-bottom: 1px solid var(--line); }
+  .hero h1 {
+    font-family: var(--mono); font-weight: 600; letter-spacing: -.02em;
+    font-size: clamp(2.1rem, 5.5vw, 3.6rem); line-height: 1.04;
+    margin: 18px 0 0; text-wrap: balance;
+  }
+  .hero h1 .q { color: var(--ink); }
+  .hero h1 .a { color: var(--accent); }
+  .hero p.lede {
+    max-width: 60ch; color: var(--ink-soft); font-size: 1.08rem; margin: 20px 0 0;
+  }
+  .scope {
+    display: inline-flex; gap: 8px; align-items: center; margin-top: 26px;
+    font-family: var(--mono); font-size: .74rem; color: var(--ink-faint);
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px;
+    background: var(--panel);
+  }
+  .scope b { color: var(--ink-soft); font-weight: 600; }
+
+  figure.scope-fig {
+    margin: 34px 0 0; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .scope-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    font-family: var(--mono); font-size: .74rem; color: var(--ink-faint);
+  }
+  .scope-head .live { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); }
+  .scope-head .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  canvas#scope { display: block; width: 100%; height: 180px; }
+  figcaption {
+    padding: 12px 16px; border-top: 1px solid var(--line);
+    font-size: .84rem; color: var(--ink-faint);
+    display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--mono);
+  }
+  figcaption .k { color: var(--ink-soft); }
+
+  /* ---------- sections ---------- */
+  section { padding: 56px 0; border-bottom: 1px solid var(--line); }
+  h2 {
+    font-family: var(--mono); font-weight: 600; letter-spacing: -.01em;
+    font-size: 1.5rem; margin: 10px 0 6px; text-wrap: balance;
+  }
+  .section-note { color: var(--ink-soft); max-width: 62ch; margin: 0 0 8px; }
+
+  /* ---------- causal cascade ---------- */
+  .cascade { display: grid; gap: 14px; margin-top: 30px; }
+  .lane {
+    display: grid; grid-template-columns: 130px 1fr; gap: 20px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; box-shadow: var(--shadow); position: relative;
+  }
+  .lane::before {
+    content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+    border-radius: 3px; background: var(--sev, var(--accent));
+  }
+  .lane .role {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--sev, var(--accent));
+  }
+  .lane .metric { font-family: var(--mono); font-size: .96rem; color: var(--ink); margin-top: 2px; }
+  .lane .reads { color: var(--ink-soft); font-size: .94rem; }
+  .lane .reads b { color: var(--ink); font-weight: 600; }
+  .lane[data-sev="symptom"] { --sev: var(--ink-faint); }
+  .lane[data-sev="crit"] { --sev: var(--crit); }
+  .lane[data-sev="warn"] { --sev: var(--warn); }
+  .lane[data-sev="hw"]  { --sev: var(--accent); }
+  .cascade .arrow {
+    justify-self: start; margin-left: 52px; color: var(--ink-faint);
+    font-family: var(--mono); font-size: .8rem; line-height: 1;
+  }
+
+  /* ---------- code ---------- */
+  .code {
+    margin-top: 24px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: var(--shadow); overflow-x: auto;
+  }
+  .code .bar {
+    padding: 10px 16px; border-bottom: 1px solid var(--line);
+    font-family: var(--mono); font-size: .72rem; color: var(--ink-faint);
+    letter-spacing: .04em;
+  }
+  pre { margin: 0; padding: 18px 16px; font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+  pre .c { color: var(--ink-faint); }
+  pre .k { color: var(--accent); }
+  pre .s { color: var(--ink); }
+  pre .old { color: var(--crit); }
+  pre .new { color: var(--good); }
+
+  /* ---------- coverage grid ---------- */
+  table.cov { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: .92rem; }
+  table.cov th, table.cov td {
+    text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line);
+  }
+  table.cov th {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+  }
+  table.cov td:first-child { font-family: var(--mono); color: var(--ink); font-size: .85rem; }
+  .pill {
+    font-family: var(--mono); font-size: .72rem; padding: 3px 9px; border-radius: 999px;
+    display: inline-block; border: 1px solid transparent;
+  }
+  .pill.yes { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent);
+    background: color-mix(in srgb, var(--good) 12%, transparent); }
+  .pill.no { color: var(--ink-faint); border-color: var(--line); background: var(--panel-2); }
+  .cap { color: var(--ink-faint); font-size: .84rem; margin-top: 14px; max-width: 60ch; }
+
+  /* ---------- steps ---------- */
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 26px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; box-shadow: var(--shadow);
+  }
+  .card h3 { font-family: var(--mono); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 8px; }
+  .card p { margin: 0; color: var(--ink-soft); font-size: .92rem; }
+
+  footer { padding: 44px 0 72px; }
+  footer .run {
+    font-family: var(--mono); font-size: .84rem; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+    color: var(--ink-soft); overflow-x: auto;
+  }
+  footer .run .p { color: var(--accent); }
+  footer p.fine { color: var(--ink-faint); font-size: .82rem; margin-top: 18px; }
+
+  @media (max-width: 560px) {
+    .lane { grid-template-columns: 1fr; gap: 6px; }
+    .lane::before { top: 0; bottom: 0; }
+    .cascade .arrow { margin-left: 8px; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">otel-inference · Agents of SigNoz</p>
+    <h1><span class="q">Why is my self-hosted<br>LLM slow?</span> <span class="a">Make one dashboard answer it.</span></h1>
+    <p class="lede">
+      vLLM already emits the signals. Nobody has agreed on their <em>names</em> — so
+      you can't build one causal view that decomposes a latency spike, or reuse it on
+      the next engine. This is a candidate <code>gen_ai.server.*</code> convention that fixes that.
+    </p>
+    <span class="scope"><b>OpenTelemetry-native</b> · maps to semantic-conventions-genai #87 · runs on a free Kaggle T4</span>
+
+    <figure class="scope-fig">
+      <div class="scope-head">
+        <span>gen_ai.server.time_to_first_token · p95</span>
+        <span class="live"><span class="dot"></span>WARM → SPIKE → RECOVER</span>
+      </div>
+      <canvas id="scope" width="1008" height="180" aria-label="A time-to-first-token waveform: flat and low during the warm phase, spiking sharply during the spike phase, then settling during recovery."></canvas>
+      <figcaption>
+        <span><span class="k">phase</span> <span id="phaseLabel">warm</span></span>
+        <span><span class="k">cache hit-rate</span> <span id="hrLabel">0.91</span></span>
+        <span><span class="k">queue wait</span> <span id="qwLabel">0.1s</span></span>
+      </figcaption>
+    </figure>
+  </header>
+
+  <section>
+    <p class="eyebrow">the read</p>
+    <h2>Symptom on top. Cause underneath.</h2>
+    <p class="section-note">
+      Existing write-ups stop at "scrape <code>/metrics</code>, draw gauges" — that shows
+      you a spike, not its reason. The convention lines up four causes under one symptom,
+      so a red line decomposes instead of just alarming.
+    </p>
+
+    <div class="cascade">
+      <div class="lane" data-sev="symptom">
+        <div><span class="role">symptom</span><div class="metric">request.duration&nbsp;p99</div></div>
+        <div class="reads">Something is slow. Read down before you page anyone.</div>
+      </div>
+      <div class="arrow">├─ decomposes into ─┐</div>
+      <div class="lane" data-sev="crit">
+        <div><span class="role">cause · scheduler</span><div class="metric">queue.wait_duration</div></div>
+        <div class="reads"><b>Requests are piling up</b> — arrivals outrunning the batch. Leads the latency line.</div>
+      </div>
+      <div class="lane" data-sev="warn">
+        <div><span class="role">cause · cache</span><div class="metric">kv_cache.hit_rate</div></div>
+        <div class="reads"><b>Every miss becomes prefill compute.</b> Computed as <code>rate(hits)/rate(queries)</code>, never a stored gauge.</div>
+      </div>
+      <div class="lane" data-sev="warn">
+        <div><span class="role">cause · phase</span><div class="metric">prefill vs decode</div></div>
+        <div class="reads"><b>Which phase is the wall.</b> Prefill-bound → prompt/cache. Decode-bound → throughput/GPU.</div>
+      </div>
+      <div class="lane" data-sev="hw">
+        <div><span class="role">cause · hardware</span><div class="metric">gpu.utilization</div></div>
+        <div class="reads"><b>Compute wall or not.</b> From a pynvml sidecar — the one signal <code>/metrics</code> omits.</div>
+      </div>
+    </div>
+    <p class="cap">Then you click the spike and land on the individual slow <b>trace</b>, whose
+      <code>gen_ai.latency.time_in_queue</code> confirms the story. Aggregate metric → single trace, one investigation.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">the primitive</p>
+    <h2>The whole trick is a rename.</h2>
+    <p class="section-note">
+      An OTTL block in the OpenTelemetry Collector rewrites each engine's raw metric
+      names into the shared convention. Adding an engine is adding <code>where</code> clauses —
+      the dashboard and alerts never change.
+    </p>
+    <div class="code">
+      <div class="bar">collector/ottl/vllm.yaml — transform/genai_convention</div>
+<pre><span class="c"># raw vendor name                          shared convention</span>
+set(name, <span class="new">"gen_ai.server.kv_cache.hits"</span>)        <span class="k">where</span> name == <span class="old">"vllm:prefix_cache_hits"</span>
+set(name, <span class="new">"gen_ai.server.kv_cache.queries"</span>)     <span class="k">where</span> name == <span class="old">"vllm:prefix_cache_queries"</span>
+set(name, <span class="new">"gen_ai.server.queue.wait_duration"</span>)  <span class="k">where</span> name == <span class="old">"vllm:request_queue_time_seconds"</span>
+set(name, <span class="new">"gen_ai.server.prefill.duration"</span>)     <span class="k">where</span> name == <span class="old">"vllm:request_prefill_time_seconds"</span>
+set(name, <span class="new">"gen_ai.server.decode.duration"</span>)      <span class="k">where</span> name == <span class="old">"vllm:request_decode_time_seconds"</span></pre>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">layer or primitive?</p>
+    <h2>Same convention, second engine, zero dashboard edits.</h2>
+    <p class="section-note">
+      The cheap test that this isn't just a vLLM wrapper: populate the same
+      <code>gen_ai.server.*</code> names from Ollama by editing only <code>where</code> clauses.
+      The empty cells are information, not failure.
+    </p>
+    <div style="overflow-x:auto">
+    <table class="cov">
+      <thead><tr><th>metric group</th><th>vLLM</th><th>Ollama (stub)</th><th>reading</th></tr></thead>
+      <tbody>
+        <tr><td>request latency</td><td><span class="pill yes">present</span></td><td><span class="pill yes">present</span></td><td>symptom row works on both</td></tr>
+        <tr><td>queue / scheduling</td><td><span class="pill yes">present</span></td><td><span class="pill yes">partial</span></td><td>scheduler depth on both</td></tr>
+        <tr><td>kv_cache.hit_rate</td><td><span class="pill yes">present</span></td><td><span class="pill no">— absent</span></td><td>Ollama exposes no prefix-cache counters</td></tr>
+        <tr><td>prefill / decode split</td><td><span class="pill yes">present</span></td><td><span class="pill no">— absent</span></td><td>Ollama can't answer "was this a cache miss?"</td></tr>
+        <tr><td>gpu.*</td><td><span class="pill yes">present</span></td><td><span class="pill yes">present</span></td><td>same pynvml sidecar, engine-independent</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="cap">A shared convention surfaces engine capability gaps through one lens —
+      instead of two dashboards that look alike and mean different things.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">reproduce it</p>
+    <h2>A latency incident, on purpose, for free.</h2>
+    <div class="cols">
+      <div class="card"><h3>warm</h3><p>Shared-prefix prompts, low concurrency. Hit-rate high, queue empty — the healthy baseline.</p></div>
+      <div class="card"><h3>spike</h3><p>Unique long prompts, high concurrency. Hit-rate collapses <em>and</em> the queue backs up. TTFT and e2e latency spike.</p></div>
+      <div class="card"><h3>recover</h3><p>Back to shared prefixes. Cache warms, queue drains, latency returns. Cause visible the whole way down.</p></div>
+    </div>
+  </section>
+
+  <footer class="wrap">
+    <p class="eyebrow">try it</p>
+    <div class="run"><span class="p">$</span> git clone https://github.com/Eienel/sii<br><span class="p">$</span> cd sii/otel-inference &amp;&amp; cat README.md</div>
+    <p class="fine">Built for the Agents of SigNoz hackathon · OpenTelemetry-native · vLLM + Ollama · self-hosted &amp; SigNoz Cloud paths.
+      The point was never a prettier gauge — it was making "why is my LLM slow?" a question one dashboard can answer, on any engine.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var canvas = document.getElementById('scope');
+  var ctx = canvas.getContext('2d');
+  var phaseLabel = document.getElementById('phaseLabel');
+  var hrLabel = document.getElementById('hrLabel');
+  var qwLabel = document.getElementById('qwLabel');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  // TTFT series over one WARM->SPIKE->RECOVER cycle (values are illustrative).
+  var N = 168, series = [], phase = [];
+  for (var i = 0; i < N; i++) {
+    var t = i / N, y, ph;
+    if (t < 0.34) { y = 0.14 + Math.sin(i*0.5)*0.015; ph = 0; }         // warm
+    else if (t < 0.68) {                                                 // spike
+      var s = (t - 0.34) / 0.34;
+      y = 0.14 + Math.pow(s, 0.6) * 0.78 + Math.sin(i*0.7)*0.04; ph = 1;
+    } else {                                                             // recover
+      var r = (t - 0.68) / 0.32;
+      y = 0.92 - Math.pow(r, 0.7) * 0.76 + Math.sin(i*0.6)*0.02; ph = 2;
+    }
+    series.push(Math.max(0.06, Math.min(0.99, y))); phase.push(ph);
+  }
+  var phaseNames = ['warm','spike','recover'];
+  var hr = ['0.91','0.18','0.74'], qw = ['0.1s','3.8s','0.4s'];
+
+  function draw(head) {
+    var W = canvas.width, H = canvas.height, pad = 14;
+    ctx.clearRect(0,0,W,H);
+    // faint grid
+    ctx.strokeStyle = css('--line'); ctx.lineWidth = 1;
+    for (var g = 1; g < 4; g++){ var gy = pad + (H-2*pad)*g/4; ctx.beginPath(); ctx.moveTo(pad,gy); ctx.lineTo(W-pad,gy); ctx.stroke(); }
+    var accent = css('--accent'), crit = css('--crit');
+    function X(i){ return pad + (W-2*pad) * (i/(N-1)); }
+    function Y(v){ return H - pad - (H-2*pad) * v; }
+    // area + line up to head
+    var lastPh = phase[Math.min(head,N-1)];
+    var col = lastPh === 1 ? crit : accent;
+    ctx.beginPath();
+    for (var i=0;i<=head && i<N;i++){ var x=X(i), y=Y(series[i]); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.lineTo(X(Math.min(head,N-1)), H-pad); ctx.lineTo(X(0), H-pad); ctx.closePath();
+    var grad = ctx.createLinearGradient(0,pad,0,H-pad);
+    grad.addColorStop(0, col + '55'); grad.addColorStop(1, col + '00');
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.beginPath();
+    for (var j=0;j<=head && j<N;j++){ var x2=X(j), y2=Y(series[j]); j===0?ctx.moveTo(x2,y2):ctx.lineTo(x2,y2); }
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.lineJoin='round'; ctx.stroke();
+    // endpoint marker
+    if (head < N) {
+      var ex=X(head), ey=Y(series[Math.min(head,N-1)]);
+      ctx.beginPath(); ctx.arc(ex,ey,3.5,0,7); ctx.fillStyle=col; ctx.fill();
+    }
+    phaseLabel.textContent = phaseNames[lastPh];
+    hrLabel.textContent = hr[lastPh];
+    qwLabel.textContent = qw[lastPh];
+  }
+
+  if (reduce) { draw(N-1); return; }
+  var head = 0;
+  function tick(){ draw(head); head++; if (head > N + 24){ head = 0; } setTimeout(tick, head <= N ? 34 : 40); }
+  tick();
+})();
+</script>
