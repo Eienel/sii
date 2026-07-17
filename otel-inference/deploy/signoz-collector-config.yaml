@@ -1,0 +1,42 @@
+# SigNoz's internal OTel collector config (writes telemetry INTO ClickHouse).
+# This mirrors the shape of the upstream SigNoz collector config; if it drifts
+# from the pinned signoz-otel-collector image, copy the version shipped in
+# github.com/SigNoz/signoz/deploy/docker. This is NOT the otel-inference
+# convention collector (that one is ../collector/otelcol-config.yaml and it
+# EXPORTS to this one on :4317).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 10000
+    timeout: 1s
+
+exporters:
+  clickhousetraces:
+    datasource: tcp://clickhouse:9000/signoz_traces
+  signozclickhousemetrics:
+    dsn: tcp://clickhouse:9000/signoz_metrics
+  clickhouselogsexporter:
+    dsn: tcp://clickhouse:9000/signoz_logs
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhousetraces]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [signozclickhousemetrics]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouselogsexporter]

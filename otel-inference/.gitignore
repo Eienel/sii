@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.eggs/
+
+# env / secrets
+.env
+*.local
+
+# data captures / otel dumps
+captures/
+*.otlp
+*.jsonl
+
+# os
+.DS_Store

@@ -1,0 +1,32 @@
+[project]
+name = "otel-inference"
+version = "0.1.0"
+description = "OpenTelemetry-native causal observability for self-hosted LLM inference (SigNoz)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = [
+    # GPU exporter
+    "pynvml>=11.5.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+    # load generator
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+# only needed on the Kaggle/GPU box that actually serves the model
+serve = [
+    "vllm>=0.6.3",
+]
+
+[project.scripts]
+otel-inference-gpu = "gpu_exporter.gpu_otel:main"
+otel-inference-load = "loadgen.generate:main"
+
+[tool.setuptools]
+packages = ["gpu_exporter", "loadgen"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

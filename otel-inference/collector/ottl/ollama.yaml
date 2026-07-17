@@ -1,0 +1,18 @@
+# Ollama -> gen_ai.server.* mapping (one-engine stub)
+#
+# The point of this file: prove otel-inference is a PRIMITIVE, not a vLLM layer.
+# The exact same gen_ai.server.* target names are populated from a second engine
+# by editing only the `where` clauses. The dashboard and alerts do not change.
+#
+# Ollama's metric surface is smaller than vLLM's (no prefill/decode split, no
+# prefix-cache counters as of writing), so some convention metrics stay empty for
+# Ollama — that absence is itself information about engine capability, and is why a
+# shared convention beats per-engine dashboards.
+
+context: metric
+statements:
+  - set(name, "gen_ai.server.requests.running")   where name == "ollama_requests_running"
+  - set(name, "gen_ai.server.request.duration")   where name == "ollama_request_duration_seconds"
+  - set(name, "gen_ai.server.time_to_first_token") where name == "ollama_prompt_eval_duration_seconds"
+  # decode throughput proxy
+  - set(name, "gen_ai.server.time_per_output_token") where name == "ollama_eval_duration_seconds"

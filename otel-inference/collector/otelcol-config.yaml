@@ -1,0 +1,126 @@
+# OpenTelemetry Collector (contrib) config — otel-inference
+#
+# Pipeline:
+#   receivers:  prometheus (scrape engine /metrics), otlp (traces + GPU metrics)
+#   processors: transform/genai_convention  <-- THE PRIMITIVE: raw engine metrics
+#               are rewritten into the candidate gen_ai.server.* semantic convention
+#               (mirrors open-telemetry/semantic-conventions-genai#87)
+#   exporters:  otlp -> SigNoz Cloud (primary), otlp -> local self-hosted SigNoz
+#
+# Requires: otelcol-contrib (the transform + prometheus receiver live in contrib).
+# Env:
+#   SIGNOZ_CLOUD_ENDPOINT   e.g. ingest.us.signoz.cloud:443
+#   SIGNOZ_INGESTION_KEY    SigNoz Cloud ingestion key
+#   VLLM_METRICS_TARGET     default 127.0.0.1:8000
+#   OLLAMA_METRICS_TARGET   default 127.0.0.1:11434
+
+receivers:
+  # Native OTel traces from vLLM (--otlp-traces-endpoint) and OTLP GPU metrics
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Scrape each engine's Prometheus /metrics endpoint.
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: vllm
+          scrape_interval: 2s
+          metrics_path: /metrics
+          static_configs:
+            - targets: ["${env:VLLM_METRICS_TARGET}"]
+              labels:
+                gen_ai.system: vllm
+        - job_name: ollama
+          scrape_interval: 5s
+          metrics_path: /metrics
+          static_configs:
+            - targets: ["${env:OLLAMA_METRICS_TARGET}"]
+              labels:
+                gen_ai.system: ollama
+
+processors:
+  batch:
+    timeout: 5s
+
+  # ----------------------------------------------------------------------------
+  # THE CONVENTION MAPPING.
+  # Rewrites vendor metric names -> gen_ai.server.* (issue #87). Adding a new
+  # engine = adding a `where` block here (see collector/ottl/<engine>.yaml).
+  # Hit-rate is intentionally NOT precomputed: we forward the hits/queries
+  # counters and let the dashboard compute rate(hits)/rate(queries), which is the
+  # correct rolling ratio for a token-granularity counter.
+  # ----------------------------------------------------------------------------
+  transform/genai_convention:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          # ---- vLLM: KV / prefix cache ----
+          - set(name, "gen_ai.server.kv_cache.usage_ratio") where name == "vllm:kv_cache_usage_perc"
+          - set(name, "gen_ai.server.kv_cache.hits")        where name == "vllm:prefix_cache_hits"
+          - set(name, "gen_ai.server.kv_cache.queries")     where name == "vllm:prefix_cache_queries"
+          # newer v1 gauge, forwarded if present
+          - set(name, "gen_ai.server.kv_cache.hit_rate")    where name == "vllm:gpu_prefix_cache_hit_rate"
+
+          # ---- vLLM: queue / scheduling ----
+          - set(name, "gen_ai.server.requests.running")     where name == "vllm:num_requests_running"
+          - set(name, "gen_ai.server.requests.queued")      where name == "vllm:num_requests_waiting"
+          - set(name, "gen_ai.server.queue.wait_duration")  where name == "vllm:request_queue_time_seconds"
+          - set(name, "gen_ai.server.preemptions")          where name == "vllm:num_preemptions"
+
+          # ---- vLLM: prefill vs decode split (the causal money metrics) ----
+          - set(name, "gen_ai.server.prefill.duration")     where name == "vllm:request_prefill_time_seconds"
+          - set(name, "gen_ai.server.decode.duration")      where name == "vllm:request_decode_time_seconds"
+
+          # ---- vLLM: request-level latency (symptom row) ----
+          - set(name, "gen_ai.server.request.duration")     where name == "vllm:e2e_request_latency_seconds"
+          - set(name, "gen_ai.server.time_to_first_token")  where name == "vllm:time_to_first_token_seconds"
+          - set(name, "gen_ai.server.time_per_output_token") where name == "vllm:request_time_per_output_token_seconds"
+
+          # ---- Ollama (one-engine stub; proves primitive-not-layer) ----
+          # Ollama exposes a smaller set; map what it has to the same names.
+          - set(name, "gen_ai.server.requests.running")     where name == "ollama_requests_running"
+          - set(name, "gen_ai.server.request.duration")     where name == "ollama_request_duration_seconds"
+
+      # Tag every converted series with the convention version so downstream
+      # dashboards/alerts can pin a schema.
+      - context: datapoint
+        statements:
+          - set(attributes["gen_ai.convention.version"], "0.1.0")
+            where IsMatch(metric.name, "^gen_ai\\.server\\.")
+
+exporters:
+  # Primary: SigNoz Cloud
+  otlp/signoz_cloud:
+    endpoint: "${env:SIGNOZ_CLOUD_ENDPOINT}"
+    headers:
+      signoz-ingestion-key: "${env:SIGNOZ_INGESTION_KEY}"
+    tls:
+      insecure: false
+
+  # Self-hosted SigNoz (docker-compose) — for the pre-event blog / data ownership.
+  otlp/signoz_local:
+    endpoint: "127.0.0.1:4317"
+    tls:
+      insecure: true
+
+  debug:
+    verbosity: normal
+
+service:
+  pipelines:
+    metrics:
+      receivers: [prometheus, otlp]
+      processors: [transform/genai_convention, batch]
+      exporters: [otlp/signoz_cloud, otlp/signoz_local]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/signoz_cloud, otlp/signoz_local]
+  telemetry:
+    logs:
+      level: info

@@ -1,0 +1,225 @@
+{
+  "title": "Self-Hosted Inference — Causal View (gen_ai.server.*)",
+  "description": "Decomposes an inference latency spike into its cause: scheduler queue pressure, KV/prefix cache hit-rate, prefill-vs-decode split, and GPU saturation. Built on the candidate gen_ai.server.* convention (semantic-conventions-genai#87). Engine-agnostic: same panels for vLLM and Ollama. NOTE: builder-query schema pinned to SigNoz v0.64; on import, if a metric key type mismatches, re-pick the metric in the panel editor.",
+  "tags": ["llm", "inference", "vllm", "gen_ai.server", "otel-inference"],
+  "variables": {},
+  "layout": [
+    { "i": "sym-e2e", "x": 0, "y": 0, "w": 6, "h": 4 },
+    { "i": "sym-ttft", "x": 6, "y": 0, "w": 6, "h": 4 },
+    { "i": "cause-queue", "x": 0, "y": 4, "w": 6, "h": 4 },
+    { "i": "cause-queuewait", "x": 6, "y": 4, "w": 6, "h": 4 },
+    { "i": "cause-hitrate", "x": 0, "y": 8, "w": 6, "h": 4 },
+    { "i": "cause-phase", "x": 6, "y": 8, "w": 6, "h": 4 },
+    { "i": "hw-gpu-util", "x": 0, "y": 12, "w": 6, "h": 4 },
+    { "i": "hw-gpu-mem", "x": 6, "y": 12, "w": 6, "h": 4 }
+  ],
+  "widgets": [
+    {
+      "id": "sym-e2e",
+      "title": "SYMPTOM · Request latency p99 (s)",
+      "description": "End-to-end request latency. When this rises, read the CAUSE row below.",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "dataSource": "metrics",
+              "queryName": "A",
+              "expression": "A",
+              "aggregateAttribute": { "key": "gen_ai.server.request.duration", "dataType": "float64", "type": "Histogram" },
+              "timeAggregation": "rate",
+              "spaceAggregation": "p99",
+              "aggregateOperator": "p99",
+              "filters": { "op": "AND", "items": [] },
+              "groupBy": [{ "key": "gen_ai.system", "dataType": "string", "type": "tag" }],
+              "legend": "{{gen_ai.system}}",
+              "reduceTo": "max",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "sym-ttft",
+      "title": "SYMPTOM · Time to first token p95 (s)",
+      "description": "TTFT is dominated by queue wait + prefill. If TTFT spikes but decode is fine, the problem is upstream of generation.",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "dataSource": "metrics",
+              "queryName": "A",
+              "expression": "A",
+              "aggregateAttribute": { "key": "gen_ai.server.time_to_first_token", "dataType": "float64", "type": "Histogram" },
+              "timeAggregation": "rate",
+              "spaceAggregation": "p95",
+              "aggregateOperator": "p95",
+              "filters": { "op": "AND", "items": [] },
+              "groupBy": [{ "key": "gen_ai.system", "dataType": "string", "type": "tag" }],
+              "legend": "{{gen_ai.system}}",
+              "reduceTo": "max",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "cause-queue",
+      "title": "CAUSE A · Scheduler — running vs queued requests",
+      "description": "Queued rising above running is the leading indicator of overload: requests are arriving faster than the batch can absorb them.",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "dataSource": "metrics", "queryName": "A", "expression": "A",
+              "aggregateAttribute": { "key": "gen_ai.server.requests.running", "dataType": "float64", "type": "Gauge" },
+              "timeAggregation": "avg", "spaceAggregation": "avg", "aggregateOperator": "avg",
+              "filters": { "op": "AND", "items": [] }, "groupBy": [],
+              "legend": "running", "reduceTo": "avg", "disabled": false
+            },
+            {
+              "dataSource": "metrics", "queryName": "B", "expression": "B",
+              "aggregateAttribute": { "key": "gen_ai.server.requests.queued", "dataType": "float64", "type": "Gauge" },
+              "timeAggregation": "avg", "spaceAggregation": "avg", "aggregateOperator": "avg",
+              "filters": { "op": "AND", "items": [] }, "groupBy": [],
+              "legend": "queued", "reduceTo": "avg", "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "cause-queuewait",
+      "title": "CAUSE A · Queue wait duration p95 (s)",
+      "description": "How long requests sat before prefill. Correlate spikes here with the TTFT panel and with individual traces' gen_ai.latency.time_in_queue.",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "dataSource": "metrics", "queryName": "A", "expression": "A",
+              "aggregateAttribute": { "key": "gen_ai.server.queue.wait_duration", "dataType": "float64", "type": "Histogram" },
+              "timeAggregation": "rate", "spaceAggregation": "p95", "aggregateOperator": "p95",
+              "filters": { "op": "AND", "items": [] }, "groupBy": [],
+              "legend": "queue wait p95", "reduceTo": "max", "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "cause-hitrate",
+      "title": "CAUSE B · Prefix cache hit-rate  = rate(hits)/rate(queries)",
+      "description": "Computed as a formula, not stored (token-granularity counters). A collapse here means more prefill compute per request -> higher TTFT.",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "dataSource": "metrics", "queryName": "A", "expression": "A",
+              "aggregateAttribute": { "key": "gen_ai.server.kv_cache.hits", "dataType": "float64", "type": "Sum" },
+              "timeAggregation": "rate", "spaceAggregation": "sum", "aggregateOperator": "rate",
+              "filters": { "op": "AND", "items": [] }, "groupBy": [],
+              "legend": "hits/s", "reduceTo": "avg", "disabled": true
+            },
+            {
+              "dataSource": "metrics", "queryName": "B", "expression": "B",
+              "aggregateAttribute": { "key": "gen_ai.server.kv_cache.queries", "dataType": "float64", "type": "Sum" },
+              "timeAggregation": "rate", "spaceAggregation": "sum", "aggregateOperator": "rate",
+              "filters": { "op": "AND", "items": [] }, "groupBy": [],
+              "legend": "queries/s", "reduceTo": "avg", "disabled": true
+            }
+          ],
+          "queryFormulas": [
+            { "queryName": "F1", "expression": "A/B", "legend": "hit-rate", "disabled": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cause-phase",
+      "title": "CAUSE C · Prefill vs Decode duration p95 (s)",
+      "description": "Which phase is the bottleneck. Prefill-bound => cache/prompt problem. Decode-bound => throughput/GPU problem.",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "dataSource": "metrics", "queryName": "A", "expression": "A",
+              "aggregateAttribute": { "key": "gen_ai.server.prefill.duration", "dataType": "float64", "type": "Histogram" },
+              "timeAggregation": "rate", "spaceAggregation": "p95", "aggregateOperator": "p95",
+              "filters": { "op": "AND", "items": [] }, "groupBy": [],
+              "legend": "prefill p95", "reduceTo": "max", "disabled": false
+            },
+            {
+              "dataSource": "metrics", "queryName": "B", "expression": "B",
+              "aggregateAttribute": { "key": "gen_ai.server.decode.duration", "dataType": "float64", "type": "Histogram" },
+              "timeAggregation": "rate", "spaceAggregation": "p95", "aggregateOperator": "p95",
+              "filters": { "op": "AND", "items": [] }, "groupBy": [],
+              "legend": "decode p95", "reduceTo": "max", "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "hw-gpu-util",
+      "title": "HARDWARE · GPU utilization",
+      "description": "From the pynvml sidecar. Saturation here alongside decode-bound latency confirms a compute wall, not a scheduling problem.",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "dataSource": "metrics", "queryName": "A", "expression": "A",
+              "aggregateAttribute": { "key": "gen_ai.server.gpu.utilization", "dataType": "float64", "type": "Gauge" },
+              "timeAggregation": "avg", "spaceAggregation": "avg", "aggregateOperator": "avg",
+              "filters": { "op": "AND", "items": [] },
+              "groupBy": [{ "key": "gpu.index", "dataType": "string", "type": "tag" }],
+              "legend": "gpu {{gpu.index}}", "reduceTo": "avg", "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "hw-gpu-mem",
+      "title": "HARDWARE · GPU memory used (bytes)",
+      "description": "Approaching device limit precedes KV-cache pressure and preemptions.",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "dataSource": "metrics", "queryName": "A", "expression": "A",
+              "aggregateAttribute": { "key": "gen_ai.server.gpu.memory.used", "dataType": "float64", "type": "Gauge" },
+              "timeAggregation": "avg", "spaceAggregation": "avg", "aggregateOperator": "avg",
+              "filters": { "op": "AND", "items": [] },
+              "groupBy": [{ "key": "gpu.index", "dataType": "string", "type": "tag" }],
+              "legend": "gpu {{gpu.index}}", "reduceTo": "avg", "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    }
+  ]
+}
