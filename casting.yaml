@@ -1,0 +1,28 @@
+# SigNoz Foundry deployment config — Agents of SigNoz hackathon requirement.
+#
+# Foundry (https://github.com/SigNoz/foundry) is the supported way to install and
+# manage SigNoz. This single declarative file describes the whole deployment; the
+# hackathon rules require it (plus casting.yaml.lock) to be committed for
+# reproducible install.
+#
+# Install Foundry, then generate + deploy:
+#   curl -fsSL https://signoz.io/foundry.sh | bash
+#   foundryctl cast -f casting.yaml         # gauge (validate) -> forge (generate) -> deploy
+#
+# `cast` also writes casting.yaml.lock, pinning the exact resolved versions so a
+# re-run reproduces byte-identical deployment files. Foundry brings up SigNoz AND
+# its MCP server in one step.
+apiVersion: v1alpha1
+metadata:
+  name: signoz
+  labels:
+    project: otel-inference
+    hackathon: agents-of-signoz
+spec:
+  deployment:
+    # Single-box Docker Compose is the demo target (matches the free-GPU /
+    # laptop-self-host path used for the pre-event blog). Foundry also supports
+    # docker-swarm and k8s flavors — swap `flavor` to retarget without touching
+    # the rest of the stack.
+    mode: docker
+    flavor: compose

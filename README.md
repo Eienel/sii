@@ -14,3 +14,12 @@ SigNoz dashboard that decomposes a latency spike into its cause.
 - **Start here:** [`otel-inference/README.md`](otel-inference/README.md)
 - **Run it on a free GPU:** [`otel-inference/docs/RUNNING_ON_KAGGLE.md`](otel-inference/docs/RUNNING_ON_KAGGLE.md)
 - **The convention:** [`otel-inference/convention/gen_ai_server_conventions.md`](otel-inference/convention/gen_ai_server_conventions.md)
+
+## Hackathon compliance
+
+- **SigNoz install:** via [Foundry](https://github.com/SigNoz/foundry) —
+  [`casting.yaml`](casting.yaml) + [`casting.yaml.lock`](casting.yaml.lock)
+  (regenerate the lock with `foundryctl cast -f casting.yaml` on the deploy host).
+- **AI use:** disclosed in [`AI_DISCLOSURE.md`](AI_DISCLOSURE.md) — required by the
+  [rules](https://www.wemakedevs.org/hackathons/signoz/rules).
+- **Tracks:** AI & Agent Observability · Signals & Dashboards.

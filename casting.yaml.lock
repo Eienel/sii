@@ -1,0 +1,29 @@
+# casting.yaml.lock — SigNoz Foundry lockfile.
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │ PLACEHOLDER — regenerate on the deploy host before submitting.           │
+# │   curl -fsSL https://signoz.io/foundry.sh | bash                         │
+# │   foundryctl cast -f casting.yaml     # rewrites this file with real pins │
+# └─────────────────────────────────────────────────────────────────────────┘
+#
+# `foundryctl cast` resolves casting.yaml against the current Foundry catalog and
+# writes the exact component versions here (ClickHouse, query-service, SigNoz OTel
+# collector, frontend, schema-migrator, MCP server) so the deployment is
+# byte-reproducible. This checked-in copy records the resolved SHAPE; the version
+# strings below are left unpinned intentionally — do not treat them as verified.
+apiVersion: v1alpha1
+metadata:
+  name: signoz
+lock:
+  generatedBy: foundryctl        # will be stamped with the foundryctl version
+  resolved:
+    deployment:
+      mode: docker
+      flavor: compose
+    components:
+      # Versions are filled in by `foundryctl cast` on the deploy host.
+      signoz: "<resolved-by-cast>"
+      signoz-otel-collector: "<resolved-by-cast>"
+      clickhouse: "<resolved-by-cast>"
+      schema-migrator: "<resolved-by-cast>"
+      signoz-mcp-server: "<resolved-by-cast>"

@@ -3,7 +3,11 @@
 **OpenTelemetry-native observability for self-hosted LLM inference — the causal layer.**
 
 Built for the [Agents of SigNoz](https://www.wemakedevs.org/hackathons/signoz)
-hackathon (Tracks 1 & 2).
+hackathon — tracks **AI & Agent Observability** and **Signals & Dashboards**.
+
+> **Install SigNoz via [Foundry](https://github.com/SigNoz/foundry)** (the
+> hackathon-required, reproducible install path). See [`casting.yaml`](../casting.yaml)
+> and [AI use disclosure](../AI_DISCLOSURE.md).
 
 ---
 
