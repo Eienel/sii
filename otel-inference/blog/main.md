@@ -7,8 +7,8 @@ track: "AI & Agent Observability / Signals & Dashboards"
 
 > Main submission for the **Agents of SigNoz** hackathon.
 > Repo: `otel-inference` — a candidate `gen_ai.server.*` convention + OTTL mapping +
-> a causal SigNoz dashboard for self-hosted inference. Proven on a free Kaggle T4,
-> across vLLM **and** Ollama.
+> a causal SigNoz dashboard for self-hosted inference, reproducible on a free
+> Kaggle T4.
 
 ## The gap
 
@@ -92,16 +92,21 @@ on purpose:
   queue backs up → TTFT and e2e latency spike.
 - **RECOVER** — back to shared prefixes → cache warms, queue drains.
 
-Watching the dashboard, the SPIKE isn't just "latency went red" — you *see* the
-hit-rate line fall and the queue-wait line rise in lockstep, and the phase panel
-tells you it's prefill-bound. Cause, not vibes.
+The point of staging the incident rather than waiting for one: the dashboard is
+built so SPIKE isn't just "latency went red." The hit-rate line and the queue-wait
+line move together, and the phase panel says which of prefill or decode is carrying
+the cost. Cause, not vibes — and because the load is scripted, it's the same
+incident every time you run it, which is what makes the dashboard falsifiable
+instead of decorative.
 
 ## Layer or primitive? The Ollama test
 
-The cheap way to prove this isn't just a vLLM wrapper: populate the **same**
-convention — and therefore the same dashboard and alerts — from **Ollama**, by
-editing only `where` clauses (`collector/ottl/ollama.yaml`). Nothing in
-`dashboards/` changes.
+The cheap test for whether this is a primitive or just a vLLM wrapper: can a second
+engine populate the **same** convention — and therefore the same dashboard and
+alerts — by editing only `where` clauses? For Ollama that's
+`collector/ottl/ollama.yaml`, and nothing in `dashboards/` changes. The stub is
+committed; treat it as the design claim the architecture makes, with the same
+kill-probe discipline applied to its metric names.
 
 Some `gen_ai.server.*` cells stay **empty** for Ollama (no prefix-cache counters,
 no prefill/decode split) — and that absence is *information*: a shared convention
@@ -111,11 +116,28 @@ when the engine changes and a primitive other engines plug into.
 
 ## What's honestly done vs next
 
-- **Done:** the convention, the OTTL mapping (vLLM + Ollama stub), GPU exporter,
-  load generator, causal dashboard, two alerts (queue-wait, hit-rate collapse),
-  self-host + Cloud paths, Kaggle notebook.
+I'd rather be precise about maturity than oversell it:
+
+- **Authored and committed:** the convention spec, the OTTL mapping (vLLM + an
+  Ollama stub), the pynvml GPU exporter, the staged load generator, the causal
+  dashboard JSON, two alert definitions (queue-wait p95, hit-rate collapse), the
+  self-hosted (Foundry) + SigNoz Cloud paths, and the Kaggle notebook.
+- **Validated locally without a GPU:** collector config and OTTL rules parse and
+  pass `otelcol validate`; the load generator was smoke-tested end-to-end against a
+  mock OpenAI-compatible server; the GPU exporter degrades cleanly where no NVML is
+  present.
+- **Pending real hardware:** the vLLM metric names are pinned from vLLM's v1 engine
+  docs, and the notebook's first cell is a deliberate **kill-probe** that prints
+  `FOUND`/`MISSING` per metric precisely because names drift between engine
+  versions. The dashboard thresholds are starting hypotheses, not truthed values —
+  they get set from observed data, and I'd rather ship them labelled as guesses than
+  pretend a number I haven't seen.
 - **Next:** upstreaming feedback to issue #87, TGI/SGLang `where` blocks, and cache
   **eviction** counters once engines expose them.
+
+That last bullet is the honest state of any convention proposal: the mapping is the
+contribution, and it's designed so a name change is a one-line fix rather than a
+rewrite.
 
 ## Try it
 

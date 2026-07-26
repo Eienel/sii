@@ -115,7 +115,15 @@ Configure the SigNoz Cloud sink via env (`SIGNOZ_CLOUD_ENDPOINT`,
 | `notebooks/kaggle_vllm.ipynb` | Free-GPU runnable setup |
 | `blog/` | Pre-event (self-host) + main (convention) blog drafts |
 
-## Status
+## Status (read this before judging the dashboard)
 
-Scaffolding + config authored; runtime verification runs on Kaggle T4 (see
-`notebooks/`). Metric names pinned against current vLLM `/metrics` (v1 engine).
+- **Authored + committed:** convention spec, OTTL mapping (vLLM + Ollama stub), GPU
+  exporter, load generator, causal dashboard JSON, alerts, Foundry/Cloud paths,
+  Kaggle notebook.
+- **Validated without a GPU:** collector config + OTTL rules pass `otelcol validate`;
+  load generator smoke-tested against a mock OpenAI-compatible server; GPU exporter
+  exits cleanly where no NVML exists.
+- **Pending real hardware:** vLLM metric names are pinned from the v1 engine and
+  re-checked at runtime by the notebook's `FOUND`/`MISSING` kill-probe (names drift
+  between versions — that probe is why a drift is a one-line OTTL fix). Dashboard
+  thresholds are stated hypotheses, not values observed on a live run.
